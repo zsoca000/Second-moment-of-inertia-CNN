@@ -98,30 +98,46 @@ class CrossSectionDataBase:
     input_data : np.array
     output_data : np.array
     shapes: list
+    name: str
     L_pix: int
     
-    def __init__(self,size,L_pix=1):
-        self.input_data  = []
-        self.output_data = []
+    def __init__(self,size,L_pix=1,name=None):
         self.size = size
         self.L_pix = L_pix
+        self.name = name
     
-    def generate_input(self,num,shapes):
+    def generate_input(self,num=None,shapes=None,img_list=None):
         w, h = self.size
         
-        self.num = int(num)
-        self.shapes = shapes
-        self.input_data  = np.empty((int(num),int(w),int(h),1))
-        self.output_data = np.empty((int(num),4))
-        
-        for i in range(self.num):
-            img = self._generate_random_shape(
-                width=int(self.size[0]), 
-                height=int(self.size[1]), 
-                shapes=shapes
-            )
+        # Random generation
+        if num is not None and shapes is not None:
             
-            self.input_data[i] = self._img2arr(img)
+            self.num = int(num)
+            self.shapes = shapes
+            self.input_data  = np.empty((self.num,int(w),int(h),1))
+            self.output_data = np.empty((self.num,4))
+            
+            for i in range(self.num):
+                img = self._generate_random_shape(
+                    width=int(self.size[0]), 
+                    height=int(self.size[1]), 
+                    shapes=shapes
+                )
+                
+                self.input_data[i] = self._img2arr(img)
+                print(f'{i}. input is ready')
+        
+        # Manual data
+        elif img_list is not None:
+            
+            self.num = len(img_list)
+            self.shapes = None
+            self.input_data  = np.empty((self.num,int(w),int(h),1))
+            self.output_data = np.empty((self.num,4))
+            
+            for i,img in enumerate(img_list):
+                self.input_data[i] = self._img2arr(img)
+                print(f'{i}. input is ready')
 
     def calculate_output(self,numint=True):
         for i in range(self.num):
@@ -129,13 +145,19 @@ class CrossSectionDataBase:
                 self.output_data[i] = self._inertia_values_numint(self.input_data[i])
             else:
                 self.output_data[i] = self._inertia_values_semidiscr(self.input_data[i])
+            
+            print(f'{i}. output is ready')
+    
+    def generate(self,num,shapes,numint=True):
+        self.generate_input(num=num,shapes=shapes)
+        self.calculate_output(numint=numint)
     
     def save(self,name,folder=''):
         
         if not os.path.exists(folder + 'data'):
-            os.mkdir("data")
+            os.makedirs(folder + 'data')
 
-        file_path = folder + f"data\{name}.h5"
+        file_path = folder + f"data/{name}.h5"
         
         if not os.path.exists(file_path):
             with h5py.File(file_path, 'w') as hf:
@@ -145,15 +167,21 @@ class CrossSectionDataBase:
         else:
             print(f'{file_path} existed before')
     
-    def load(self,name):
-        file_path = f"data\{name}.h5"
+    def load(self,name,folder=''):
+        
+        self.add_name(name)
+        
+        file_path = folder + f"data/{name}.h5"
         
         with h5py.File(file_path, 'r') as hf:
-            self.shapes = hf['shapes']
+            self.shapes = list(hf['shapes'])
             self.input_data = hf['input_data'][()]
             self.output_data = hf['output_data'][()]
             self.num = self.input_data.shape[0]
-            self.size = (self.input_data[1],self.input_data[2])
+            self.size = (self.input_data.shape[1],self.input_data.shape[2])
+            
+    def add_name(self,name):
+        self.name = name
     
     @property
     def input_distribution(self):
@@ -177,9 +205,12 @@ class CrossSectionDataBase:
             arr = np.round(zoom(self.input_data[i,:,:,0], zoom=reduce_factor, order=0)).astype(int)
             arrays.append(arr.reshape(arr.shape[0],arr.shape[1],1))
             
+            print(f'\t - {i}/{self.num}. I resized! ')
+            
         ret.input_data  = np.array(arrays)
         ret.output_data = self.output_data
         ret.shapes = self.shapes
+        ret.name = self.name
         ret.num = self.num
         
         return ret
@@ -191,26 +222,28 @@ class CrossSectionDataBase:
         reduce_factor = min(new_width/width,new_height/height)
         
         ret = CrossSectionDataBase(new_size,L_pix=self.L_pix/reduce_factor)
-        
-        
+
         inertias = []
         arrays = []
         
         for i in range(self.num):
+            
             arr = np.round(zoom(self.input_data[i,:,:,0], zoom=reduce_factor, order=0)).astype(int)
+            arr = arr.reshape(arr.shape[0],arr.shape[1],1)
             
             if numint:
-                inertia,arr = ret._inertia_datas_numint(arr)
+                inertia = ret._inertia_values_numint(arr)
             else:
-                inertia,arr = ret._inertia_datas_semidiscr(arr)
-                
-            inertias.append(inertia)
+                inertia = ret._inertia_values_semidiscr(arr)
             arrays.append(arr)
-        
-        
-        ret.input_data  =   np.array(arrays)
+            inertias.append(inertia)
+            
+            print(f'\t - {i}/{self.num}. IO resized! ')
+
         ret.output_data = np.array(inertias)
+        ret.input_data = np.array(arrays)
         ret.shapes = self.shapes
+        ret.name = self.name
         ret.num = self.num
         
         return ret
@@ -262,6 +295,7 @@ class CrossSectionDataBase:
         return arr    
     
     def _inertia_values_numint(self,arr):
+        
         rows,cols,_ = arr.shape
         I_x,I_y,I_xy,A  = 0,0,0,0
         A_pix = self.L_pix*self.L_pix # area of a pixel

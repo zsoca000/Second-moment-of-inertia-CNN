@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+*.egg-info/
+build/
+
+# generated data and trained models
+data/
+*.h5
+models/

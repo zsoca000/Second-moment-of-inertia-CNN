@@ -99,7 +99,7 @@ class ModelEvaluator:
     def data_set_distribution(self,size,name='train'):    
 
         data_base = CrossSectionDataBase(size)
-        data_base.load(name)
+        data_base.load(name,folder=f"{size[0]}x{size[1]}/")
 
         _, ax = plt.subplots(5,5,figsize=(10,10),dpi=100,subplot_kw={'xticks': [], 'yticks': []})
         n = 500

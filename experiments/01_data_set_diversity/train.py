@@ -42,7 +42,7 @@ def train_models_by_size(size,start,end,num_run):
         
         # load the train data set
         data_base = CrossSectionDataBase(size)
-        data_base.load('train')
+        data_base.load('train',folder=f"{width}x{height}/")
         
         # prepare data for train
         mean = np.mean(data_base.output_data[:n], axis=0)
@@ -95,7 +95,7 @@ def test_on_self_benchmark(size,start,end):
     
     # load the benchmark data set
     data_base = CrossSectionDataBase(size)
-    data_base.load('benchmark')
+    data_base.load('benchmark',folder=f"{width}x{height}/")
 
     for n in range(start,end,100):
         model_name = f'model_{str(n).zfill(5)}.h5'
